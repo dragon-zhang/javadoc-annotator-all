@@ -133,7 +133,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                 Map<String, Object> classComment = initClassComment(classDoc);
                 Set<JavadocMapping<? extends Annotation>> tagClass = getAnnotationsNeedToTag(beanClass, this.tagClass);
                 for (JavadocMapping<? extends Annotation> mapping : tagClass) {
-                    AnnotationDescription annotation = buildAnnotation(classComment, mapping);
+                    AnnotationDescription annotation = buildAnnotation(classComment, mapping, null);
                     builder = builder.annotateType(annotation);
                 }
             }
@@ -149,51 +149,24 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                     Map<String, Object> methodComment = allMethodComment.get(targetMethodName);
                     Set<JavadocMapping<? extends Annotation>> tagMethod = getAnnotationsNeedToTag(method, this.tagMethod);
                     for (JavadocMapping<? extends Annotation> mapping : tagMethod) {
-                        AnnotationDescription annotation = buildAnnotation(methodComment, mapping);
+                        AnnotationDescription annotation = buildAnnotation(methodComment, mapping, null);
                         //只加注解，不改变原有的方法体，找了好久...
                         builder = builder.visit(new MemberAttributeExtension.ForMethod()
                                 .annotateMethod(annotation)
                                 .on(ElementMatchers.named(targetMethodName)));
                     }
 
-                    Map<String, Object> paramMap = initParamCommentInMethod(methodComment);
+                    Map<String, Object> paramCommentMap = initParamCommentInMethod(methodComment);
                     Parameter[] parameters = method.getParameters();
                     for (int i = 0; i < parameters.length; i++) {
                         Parameter parameter = parameters[i];
                         String parameterName = parameter.getName();
                         Set<JavadocMapping<? extends Annotation>> tagParameter = getAnnotationsNeedToTag(parameter, this.tagParameter);
                         for (JavadocMapping<? extends Annotation> mapping : tagParameter) {
-                            Class<? extends Annotation> annotationType = mapping.annotationType();
-                            AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
-                                    .ofType(annotationType);
-                            for (Method memberMethod : annotationType.getDeclaredMethods()) {
-                                String methodName = memberMethod.getName();
-                                try {
-                                    //优先取用户指定的默认值
-                                    Object value = memberMethod.invoke(mapping.getAnnotation());
-                                    if (null == value) {
-                                        //注释的key
-                                        String tagKey = mapping.getCommentKey(methodName);
-                                        if (null != tagKey) {
-                                            if (PARAM_NAME_KEY.equals(tagKey)) {
-                                                value = parameterName;
-                                            } else if (PARAM_DESCRIPTION_KEY.equals(tagKey)) {
-                                                value = paramMap.get(parameterName);
-                                            }
-                                        }
-                                    }
-                                    if (null == value) {
-                                        //没有映射，取注解定义的默认值
-                                        value = memberMethod.getDefaultValue();
-                                    }
-                                    annotationBuilder = defineMemberValue(annotationBuilder, memberMethod, methodName, value);
-                                } catch (Exception e) {
-                                    log.error("annotate annotation failed !", e);
-                                }
-                            }
+                            AnnotationDescription annotation = buildAnnotation(paramCommentMap, mapping, parameterName);
                             //只加注解
                             builder = builder.visit(new MemberAttributeExtension.ForMethod()
-                                    .annotateParameter(i, annotationBuilder.build())
+                                    .annotateParameter(i, annotation)
                                     .on(ElementMatchers.named(targetMethodName)));
                         }
                     }
@@ -212,7 +185,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
         }
     }
 
-    private AnnotationDescription buildAnnotation(Map<String, Object> classComment, JavadocMapping<? extends Annotation> mapping) {
+    private AnnotationDescription buildAnnotation(Map<String, Object> comment, JavadocMapping<? extends Annotation> mapping, String parameterName) {
         Class<? extends Annotation> annotationType = mapping.annotationType();
         AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
                 .ofType(annotationType);
@@ -224,8 +197,10 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                 if (null == value) {
                     //注释的key
                     String tagKey = mapping.getCommentKey(methodName);
-                    if (null != tagKey) {
-                        value = classComment.get(tagKey);
+                    if (null == parameterName) {
+                        value = getMemberValue(comment, tagKey);
+                    } else {
+                        value = getMemberValue(comment, tagKey, parameterName);
                     }
                 }
                 if (null == value) {
@@ -238,6 +213,24 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             }
         }
         return annotationBuilder.build();
+    }
+
+    private Object getMemberValue(Map<String, Object> comment, String tagKey, String parameterName) {
+        if (null != tagKey) {
+            if (PARAM_NAME_KEY.equals(tagKey)) {
+                return parameterName;
+            } else if (PARAM_DESCRIPTION_KEY.equals(tagKey)) {
+                return comment.get(parameterName);
+            }
+        }
+        return null;
+    }
+
+    private Object getMemberValue(Map<String, Object> comment, String tagKey) {
+        if (null != tagKey) {
+            return comment.get(tagKey);
+        }
+        return null;
     }
 
     private Map<String, Object> initParamCommentInMethod(Map<String, Object> methodComment) {
@@ -353,6 +346,4 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
         }
         return false;
     }
-
-
 }
