@@ -2,6 +2,7 @@ package org.dragon.zhang.examples.swagger;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.Authorization;
 import io.swagger.annotations.AuthorizationScope;
@@ -57,7 +58,7 @@ public class TargetController implements BeanNameAware {
     /**
      * 方法上的描述2
      *
-     * @param param 参数
+     * @param param2 参数2
      * @return 返回值2
      */
     @ApiResponse(
@@ -115,8 +116,12 @@ public class TargetController implements BeanNameAware {
             hidden = false
     )
     @RequestMapping(path = "/test2", method = RequestMethod.GET)
-    public String test(@RequestParam String param) {
-        return name + " say hello, " + param;
+    public String test(@ApiParam(allowMultiple = false, allowEmptyValue = false, collectionFormat = "", name = "param2", type = "", value = "参数2", format = "", access = "", readOnly = false, required = false, examples = @Example({@ExampleProperty(
+            value = "",
+            mediaType = ""
+    )}), example = "", defaultValue = "", allowableValues = "", hidden = false)
+                       @RequestParam String param2) {
+        return name + " say hello, " + param2;
     }
 
     @Override

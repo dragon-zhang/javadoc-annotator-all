@@ -29,6 +29,7 @@ import org.springframework.core.annotation.AnnotationUtils;
 import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +47,12 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
     protected static final Logger log = LoggerFactory.getLogger(JavadocAnnotator.class);
 
     protected static final CommentFormatter FORMATTER = new CommentFormatter();
+
+    protected static final String DESCRIPTION_KEY = "description";
+    protected static final String RETURN_KEY = "return";
+    protected static final String PARAM_KEY_PRE = "param-";
+    protected static final String PARAM_NAME_KEY = "paramName";
+    protected static final String PARAM_DESCRIPTION_KEY = "paramDescription";
 
     /**
      * 打了什么注解的类需要修改字节码
@@ -67,12 +74,20 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
      */
     protected Set<JavadocMapping<? extends Annotation>> tagMethod;
 
+    /**
+     * 匹配的方法需要打什么注解
+     */
+    protected Set<JavadocMapping<? extends Annotation>> tagParameter;
+
     public JavadocAnnotator() {
         this.typeMarks = buildTypeMarks();
         this.methodMarks = buildMethodMarks();
         this.tagClass = buildTagClass();
         this.tagMethod = buildTagMethod();
+        this.tagParameter = buildTagParameter();
     }
+
+    protected abstract Set<JavadocMapping<? extends Annotation>> buildTagParameter();
 
     protected abstract Set<JavadocMapping<? extends Annotation>> buildTagMethod();
 
@@ -118,14 +133,14 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                 Map<String, String> commentMap = classDoc.getOther()
                         .stream().collect(Collectors.toMap(
                                 OtherJavadoc::getName, data -> format(data.getComment())));
-                commentMap.put("description", format(classDoc.getComment()));
+                commentMap.put(DESCRIPTION_KEY, format(classDoc.getComment()));
 
                 //只需要打没有打过的注解
-                List<Class<? extends Annotation>> annotationTypes = Arrays.stream(beanClass.getDeclaredAnnotations())
+                List<Class<? extends Annotation>> classAnnotationTypes = Arrays.stream(beanClass.getDeclaredAnnotations())
                         .map(Annotation::annotationType)
                         .collect(Collectors.toList());
                 Set<JavadocMapping<? extends Annotation>> tagClass = this.tagClass.stream()
-                        .filter(annotation -> !annotationTypes.contains(annotation.annotationType()))
+                        .filter(annotation -> !classAnnotationTypes.contains(annotation.annotationType()))
                         .collect(Collectors.toSet());
                 for (JavadocMapping<? extends Annotation> mapping : tagClass) {
                     Class<? extends Annotation> annotationType = mapping.annotationType();
@@ -199,23 +214,23 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                 }
             }
             if (!tagMethodEmpty) {
-                Map<String, Map<String, String>> commentMap = new HashMap<>(16);
+                Map<String, Map<String, Object>> commentMap = new HashMap<>(16);
                 //初始化注释
                 for (MethodJavadoc methodDoc : classDoc.getMethods()) {
-                    Map<String, String> map = new HashMap<>();
+                    Map<String, Object> map = new HashMap<>();
                     if (!methodDoc.isConstructor()) {
-                        map.put("return", format(methodDoc.getReturns()));
+                        map.put(RETURN_KEY, format(methodDoc.getReturns()));
                     }
                     for (OtherJavadoc other : methodDoc.getOther()) {
                         map.put(other.getName(), format(other.getComment()));
                     }
                     for (ParamJavadoc paramDoc : methodDoc.getParams()) {
-                        map.put(paramDoc.getName(), format(paramDoc.getComment()));
+                        map.put(PARAM_KEY_PRE + paramDoc.getName(), format(paramDoc.getComment()));
                     }
                     for (ThrowsJavadoc throwsDoc : methodDoc.getThrows()) {
                         map.put(throwsDoc.getName(), format(throwsDoc.getComment()));
                     }
-                    map.put("description", format(methodDoc.getComment()));
+                    map.put(DESCRIPTION_KEY, format(methodDoc.getComment()));
                     commentMap.put(methodDoc.getName(), map);
                 }
                 for (Method method : beanClass.getDeclaredMethods()) {
@@ -225,13 +240,13 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                         continue;
                     }
                     String targetMethodName = method.getName();
-                    Map<String, String> map = commentMap.get(targetMethodName);
+                    Map<String, Object> map = commentMap.get(targetMethodName);
                     //只需要打没有打过的注解
-                    List<Class<? extends Annotation>> annotationTypes = Arrays.stream(method.getDeclaredAnnotations())
+                    List<Class<? extends Annotation>> methodAnnotationTypes = Arrays.stream(method.getDeclaredAnnotations())
                             .map(Annotation::annotationType)
                             .collect(Collectors.toList());
                     Set<JavadocMapping<? extends Annotation>> tagMethod = this.tagMethod.stream()
-                            .filter(annotation -> !annotationTypes.contains(annotation.annotationType()))
+                            .filter(annotation -> !methodAnnotationTypes.contains(annotation.annotationType()))
                             .collect(Collectors.toSet());
                     for (JavadocMapping<? extends Annotation> mapping : tagMethod) {
                         Class<? extends Annotation> annotationType = mapping.annotationType();
@@ -310,8 +325,109 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                             log.error(annotationType.getName(), e);
                         }
                     }
-                }
 
+                    //处理参数
+                    Map<String, Object> paramMap = new HashMap<>();
+                    for (Map.Entry<String, Object> entry : map.entrySet()) {
+                        String key = entry.getKey();
+                        if (key.startsWith(PARAM_KEY_PRE)) {
+                            paramMap.put(key.replace(PARAM_KEY_PRE, ""), entry.getValue());
+                        }
+                    }
+                    Parameter[] parameters = method.getParameters();
+                    for (int i = 0; i < parameters.length; i++) {
+                        Parameter parameter = parameters[i];
+                        String parameterName = parameter.getName();
+                        //只需要打没有打过的注解
+                        List<Class<? extends Annotation>> parameterAnnotationTypes = Arrays.stream(parameter.getDeclaredAnnotations())
+                                .map(Annotation::annotationType)
+                                .collect(Collectors.toList());
+                        Set<JavadocMapping<? extends Annotation>> tagParameter = this.tagParameter.stream()
+                                .filter(annotation -> !parameterAnnotationTypes.contains(annotation.annotationType()))
+                                .collect(Collectors.toSet());
+                        for (JavadocMapping<? extends Annotation> mapping : tagParameter) {
+                            Class<? extends Annotation> annotationType = mapping.annotationType();
+                            AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
+                                    .ofType(annotationType);
+                            for (Method memberMethod : annotationType.getDeclaredMethods()) {
+                                String methodName = memberMethod.getName();
+                                try {
+                                    //优先取用户指定的默认值
+                                    Object value = memberMethod.invoke(mapping.getAnnotation());
+                                    if (null == value) {
+                                        //注释的key
+                                        String tagKey = mapping.getCommentKey(methodName);
+                                        if (null != tagKey) {
+                                            if (PARAM_NAME_KEY.equals(tagKey)) {
+                                                value = parameterName;
+                                            } else if (PARAM_DESCRIPTION_KEY.equals(tagKey)) {
+                                                value = paramMap.get(parameterName);
+                                            }
+                                        }
+                                    }
+                                    if (null == value) {
+                                        //没有映射，取注解定义的默认值
+                                        value = memberMethod.getDefaultValue();
+                                    }
+                                    Class<?> returnType = memberMethod.getReturnType();
+                                    if (returnType.isArray()) {
+                                        Class<Annotation> componentType = (Class<Annotation>) returnType.getComponentType();
+                                        if (value instanceof Annotation[]) {
+                                            annotationBuilder = annotationBuilder.defineAnnotationArray(methodName, componentType, (Annotation[]) value);
+                                        } else if (value instanceof Class<?>[]) {
+                                            annotationBuilder = annotationBuilder.defineTypeArray(methodName, (Class<?>[]) value);
+                                        } else if (value instanceof Enum<?>[]) {
+                                            Set<String> enums = new HashSet<>();
+                                            for (Enum<?> anEnum : ((Enum<?>[]) value)) {
+                                                enums.add(anEnum.name());
+                                            }
+                                            annotationBuilder = annotationBuilder.defineEnumerationArray(methodName,
+                                                    TypeDescription.ForLoadedType.of(componentType), enums.toArray(new String[0]));
+                                        } else if (value instanceof Boolean) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Boolean) value);
+                                        } else if (value instanceof Byte) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Byte) value);
+                                        } else if (value instanceof Short) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Short) value);
+                                        } else if (value instanceof Character) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Character) value);
+                                        } else if (value instanceof Integer) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Integer) value);
+                                        } else if (value instanceof Long) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Long) value);
+                                        } else if (value instanceof Float) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Float) value);
+                                        } else if (value instanceof Double) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Double) value);
+                                        } else if (value instanceof String) {
+                                            annotationBuilder = annotationBuilder.defineArray(methodName, (String) value);
+                                        } else {
+                                            annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
+                                        }
+                                    } else if (value instanceof Annotation) {
+                                        annotationBuilder = annotationBuilder.define(methodName, (Annotation) value);
+                                    } else if (value instanceof Class<?>) {
+                                        annotationBuilder = annotationBuilder.define(methodName, (Class<?>) value);
+                                    } else if (value instanceof Enum<?>) {
+                                        annotationBuilder = annotationBuilder.define(methodName, (Enum<?>) value);
+                                    } else {
+                                        annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
+                                    }
+                                } catch (Exception e) {
+                                    log.error("annotate annotation failed !", e);
+                                }
+                            }
+                            try {
+                                //只加注解
+                                builder = builder.visit(new MemberAttributeExtension.ForMethod()
+                                        .annotateParameter(i, annotationBuilder.build())
+                                        .on(ElementMatchers.named(targetMethodName)));
+                            } catch (Exception e) {
+                                log.error(annotationType.getName(), e);
+                            }
+                        }
+                    }
+                }
             }
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             DynamicType.Unloaded<?> unloaded = builder.make();
