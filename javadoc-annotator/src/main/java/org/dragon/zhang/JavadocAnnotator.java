@@ -28,6 +28,7 @@ import org.springframework.core.annotation.AnnotationUtils;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
@@ -134,14 +135,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                         .stream().collect(Collectors.toMap(
                                 OtherJavadoc::getName, data -> format(data.getComment())));
                 commentMap.put(DESCRIPTION_KEY, format(classDoc.getComment()));
-
-                //只需要打没有打过的注解
-                List<Class<? extends Annotation>> classAnnotationTypes = Arrays.stream(beanClass.getDeclaredAnnotations())
-                        .map(Annotation::annotationType)
-                        .collect(Collectors.toList());
-                Set<JavadocMapping<? extends Annotation>> tagClass = this.tagClass.stream()
-                        .filter(annotation -> !classAnnotationTypes.contains(annotation.annotationType()))
-                        .collect(Collectors.toSet());
+                Set<JavadocMapping<? extends Annotation>> tagClass = getAnnotationsNeedToTag(beanClass, this.tagClass);
                 for (JavadocMapping<? extends Annotation> mapping : tagClass) {
                     Class<? extends Annotation> annotationType = mapping.annotationType();
                     AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
@@ -241,13 +235,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                     }
                     String targetMethodName = method.getName();
                     Map<String, Object> map = commentMap.get(targetMethodName);
-                    //只需要打没有打过的注解
-                    List<Class<? extends Annotation>> methodAnnotationTypes = Arrays.stream(method.getDeclaredAnnotations())
-                            .map(Annotation::annotationType)
-                            .collect(Collectors.toList());
-                    Set<JavadocMapping<? extends Annotation>> tagMethod = this.tagMethod.stream()
-                            .filter(annotation -> !methodAnnotationTypes.contains(annotation.annotationType()))
-                            .collect(Collectors.toSet());
+                    Set<JavadocMapping<? extends Annotation>> tagMethod = getAnnotationsNeedToTag(method, this.tagMethod);
                     for (JavadocMapping<? extends Annotation> mapping : tagMethod) {
                         Class<? extends Annotation> annotationType = mapping.annotationType();
                         AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
@@ -338,13 +326,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                     for (int i = 0; i < parameters.length; i++) {
                         Parameter parameter = parameters[i];
                         String parameterName = parameter.getName();
-                        //只需要打没有打过的注解
-                        List<Class<? extends Annotation>> parameterAnnotationTypes = Arrays.stream(parameter.getDeclaredAnnotations())
-                                .map(Annotation::annotationType)
-                                .collect(Collectors.toList());
-                        Set<JavadocMapping<? extends Annotation>> tagParameter = this.tagParameter.stream()
-                                .filter(annotation -> !parameterAnnotationTypes.contains(annotation.annotationType()))
-                                .collect(Collectors.toSet());
+                        Set<JavadocMapping<? extends Annotation>> tagParameter = getAnnotationsNeedToTag(parameter, this.tagParameter);
                         for (JavadocMapping<? extends Annotation> mapping : tagParameter) {
                             Class<? extends Annotation> annotationType = mapping.annotationType();
                             AnnotationDescription.Builder annotationBuilder = AnnotationDescription.Builder
@@ -440,6 +422,16 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             }
             unloaded.load(classLoader, ClassReloadingStrategy.fromInstalledAgent());
         }
+    }
+
+    private Set<JavadocMapping<? extends Annotation>> getAnnotationsNeedToTag(AnnotatedElement annotatedElement, Set<JavadocMapping<? extends Annotation>> annotationsNeedToTag) {
+        //只需要打没有打过的注解
+        List<Class<? extends Annotation>> declared = Arrays.stream(annotatedElement.getDeclaredAnnotations())
+                .map(Annotation::annotationType)
+                .collect(Collectors.toList());
+        return annotationsNeedToTag.stream()
+                .filter(annotation -> !declared.contains(annotation.annotationType()))
+                .collect(Collectors.toSet());
     }
 
     private boolean needAnnotate(Method method) {
