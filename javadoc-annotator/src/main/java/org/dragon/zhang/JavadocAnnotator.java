@@ -330,7 +330,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
         Set<Class<? extends Annotation>> marks = new HashSet<>(methodMarks);
         for (Annotation annotation : method.getDeclaredAnnotations()) {
             for (Class<? extends Annotation> mark : marks) {
-                if (AnnotationUtils.isAnnotationMetaPresent(annotation.annotationType(), mark)) {
+                if (!AnnotationUtils.isAnnotationMetaPresent(annotation.annotationType(), mark)) {
                     return true;
                 }
             }
