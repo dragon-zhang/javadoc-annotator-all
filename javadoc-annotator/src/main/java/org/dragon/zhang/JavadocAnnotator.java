@@ -130,11 +130,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             DynamicType.Builder<?> builder = new ByteBuddy()
                     .redefine(beanClass);
             if (!tagClassEmpty) {
-                //初始化注释
-                Map<String, String> commentMap = classDoc.getOther()
-                        .stream().collect(Collectors.toMap(
-                                OtherJavadoc::getName, data -> format(data.getComment())));
-                commentMap.put(DESCRIPTION_KEY, format(classDoc.getComment()));
+                Map<String, String> classComment = initClassComment(classDoc);
                 Set<JavadocMapping<? extends Annotation>> tagClass = getAnnotationsNeedToTag(beanClass, this.tagClass);
                 for (JavadocMapping<? extends Annotation> mapping : tagClass) {
                     Class<? extends Annotation> annotationType = mapping.annotationType();
@@ -149,7 +145,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                                 //注释的key
                                 String tagKey = mapping.getCommentKey(methodName);
                                 if (null != tagKey) {
-                                    value = commentMap.get(tagKey);
+                                    value = classComment.get(tagKey);
                                 }
                             }
                             if (null == value) {
@@ -208,25 +204,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                 }
             }
             if (!tagMethodEmpty) {
-                Map<String, Map<String, Object>> commentMap = new HashMap<>(16);
-                //初始化注释
-                for (MethodJavadoc methodDoc : classDoc.getMethods()) {
-                    Map<String, Object> map = new HashMap<>();
-                    if (!methodDoc.isConstructor()) {
-                        map.put(RETURN_KEY, format(methodDoc.getReturns()));
-                    }
-                    for (OtherJavadoc other : methodDoc.getOther()) {
-                        map.put(other.getName(), format(other.getComment()));
-                    }
-                    for (ParamJavadoc paramDoc : methodDoc.getParams()) {
-                        map.put(PARAM_KEY_PRE + paramDoc.getName(), format(paramDoc.getComment()));
-                    }
-                    for (ThrowsJavadoc throwsDoc : methodDoc.getThrows()) {
-                        map.put(throwsDoc.getName(), format(throwsDoc.getComment()));
-                    }
-                    map.put(DESCRIPTION_KEY, format(methodDoc.getComment()));
-                    commentMap.put(methodDoc.getName(), map);
-                }
+                Map<String, Map<String, Object>> allMethodComment = initAllMethodComment(classDoc);
                 for (Method method : beanClass.getDeclaredMethods()) {
                     //只有打了指定注解的方法才需要补注解
                     boolean needAnnotate = needAnnotate(method);
@@ -234,7 +212,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                         continue;
                     }
                     String targetMethodName = method.getName();
-                    Map<String, Object> map = commentMap.get(targetMethodName);
+                    Map<String, Object> methodComment = allMethodComment.get(targetMethodName);
                     Set<JavadocMapping<? extends Annotation>> tagMethod = getAnnotationsNeedToTag(method, this.tagMethod);
                     for (JavadocMapping<? extends Annotation> mapping : tagMethod) {
                         Class<? extends Annotation> annotationType = mapping.annotationType();
@@ -249,7 +227,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                                     //注释的key
                                     String tagKey = mapping.getCommentKey(methodName);
                                     if (null != tagKey) {
-                                        value = map.get(tagKey);
+                                        value = methodComment.get(tagKey);
                                     }
                                 }
                                 if (null == value) {
@@ -316,7 +294,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
 
                     //处理参数
                     Map<String, Object> paramMap = new HashMap<>();
-                    for (Map.Entry<String, Object> entry : map.entrySet()) {
+                    for (Map.Entry<String, Object> entry : methodComment.entrySet()) {
                         String key = entry.getKey();
                         if (key.startsWith(PARAM_KEY_PRE)) {
                             paramMap.put(key.replace(PARAM_KEY_PRE, ""), entry.getValue());
@@ -422,6 +400,38 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             }
             unloaded.load(classLoader, ClassReloadingStrategy.fromInstalledAgent());
         }
+    }
+
+    private Map<String, Map<String, Object>> initAllMethodComment(ClassJavadoc classDoc) {
+        Map<String, Map<String, Object>> commentMap = new HashMap<>(16);
+        //初始化注释
+        for (MethodJavadoc methodDoc : classDoc.getMethods()) {
+            Map<String, Object> map = new HashMap<>();
+            if (!methodDoc.isConstructor()) {
+                map.put(RETURN_KEY, format(methodDoc.getReturns()));
+            }
+            for (OtherJavadoc other : methodDoc.getOther()) {
+                map.put(other.getName(), format(other.getComment()));
+            }
+            for (ParamJavadoc paramDoc : methodDoc.getParams()) {
+                map.put(PARAM_KEY_PRE + paramDoc.getName(), format(paramDoc.getComment()));
+            }
+            for (ThrowsJavadoc throwsDoc : methodDoc.getThrows()) {
+                map.put(throwsDoc.getName(), format(throwsDoc.getComment()));
+            }
+            map.put(DESCRIPTION_KEY, format(methodDoc.getComment()));
+            commentMap.put(methodDoc.getName(), map);
+        }
+        return commentMap;
+    }
+
+    private Map<String, String> initClassComment(ClassJavadoc classJavadoc) {
+        //初始化注释
+        Map<String, String> commentMap = classJavadoc.getOther()
+                .stream().collect(Collectors.toMap(
+                        OtherJavadoc::getName, data -> format(data.getComment())));
+        commentMap.put(DESCRIPTION_KEY, format(classJavadoc.getComment()));
+        return commentMap;
     }
 
     private Set<JavadocMapping<? extends Annotation>> getAnnotationsNeedToTag(AnnotatedElement annotatedElement, Set<JavadocMapping<? extends Annotation>> annotationsNeedToTag) {
