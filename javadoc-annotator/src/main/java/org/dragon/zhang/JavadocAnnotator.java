@@ -152,50 +152,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                                 //没有映射，取注解定义的默认值
                                 value = memberMethod.getDefaultValue();
                             }
-                            Class<?> returnType = memberMethod.getReturnType();
-                            if (returnType.isArray()) {
-                                Class<Annotation> componentType = (Class<Annotation>) returnType.getComponentType();
-                                if (value instanceof Annotation[]) {
-                                    annotationBuilder = annotationBuilder.defineAnnotationArray(methodName, componentType, (Annotation[]) value);
-                                } else if (value instanceof Class<?>[]) {
-                                    annotationBuilder = annotationBuilder.defineTypeArray(methodName, (Class<?>[]) value);
-                                } else if (value instanceof Enum<?>[]) {
-                                    Set<String> enums = new HashSet<>();
-                                    for (Enum<?> anEnum : ((Enum<?>[]) value)) {
-                                        enums.add(anEnum.name());
-                                    }
-                                    annotationBuilder = annotationBuilder.defineEnumerationArray(methodName,
-                                            TypeDescription.ForLoadedType.of(componentType), enums.toArray(new String[0]));
-                                } else if (value instanceof Boolean) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Boolean) value);
-                                } else if (value instanceof Byte) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Byte) value);
-                                } else if (value instanceof Short) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Short) value);
-                                } else if (value instanceof Character) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Character) value);
-                                } else if (value instanceof Integer) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Integer) value);
-                                } else if (value instanceof Long) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Long) value);
-                                } else if (value instanceof Float) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Float) value);
-                                } else if (value instanceof Double) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (Double) value);
-                                } else if (value instanceof String) {
-                                    annotationBuilder = annotationBuilder.defineArray(methodName, (String) value);
-                                } else {
-                                    annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                                }
-                            } else if (value instanceof Annotation) {
-                                annotationBuilder = annotationBuilder.define(methodName, (Annotation) value);
-                            } else if (value instanceof Class<?>) {
-                                annotationBuilder = annotationBuilder.define(methodName, (Class<?>) value);
-                            } else if (value instanceof Enum<?>) {
-                                annotationBuilder = annotationBuilder.define(methodName, (Enum<?>) value);
-                            } else {
-                                annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                            }
+                            annotationBuilder = defineMemberValue(annotationBuilder, memberMethod, methodName, value);
                         } catch (Exception e) {
                             log.error("annotate annotation failed !", e);
                         }
@@ -234,50 +191,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                                     //没有映射，取注解定义的默认值
                                     value = memberMethod.getDefaultValue();
                                 }
-                                Class<?> returnType = memberMethod.getReturnType();
-                                if (returnType.isArray()) {
-                                    Class<Annotation> componentType = (Class<Annotation>) returnType.getComponentType();
-                                    if (value instanceof Annotation[]) {
-                                        annotationBuilder = annotationBuilder.defineAnnotationArray(methodName, componentType, (Annotation[]) value);
-                                    } else if (value instanceof Class<?>[]) {
-                                        annotationBuilder = annotationBuilder.defineTypeArray(methodName, (Class<?>[]) value);
-                                    } else if (value instanceof Enum<?>[]) {
-                                        Set<String> enums = new HashSet<>();
-                                        for (Enum<?> anEnum : ((Enum<?>[]) value)) {
-                                            enums.add(anEnum.name());
-                                        }
-                                        annotationBuilder = annotationBuilder.defineEnumerationArray(methodName,
-                                                TypeDescription.ForLoadedType.of(componentType), enums.toArray(new String[0]));
-                                    } else if (value instanceof Boolean) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Boolean) value);
-                                    } else if (value instanceof Byte) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Byte) value);
-                                    } else if (value instanceof Short) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Short) value);
-                                    } else if (value instanceof Character) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Character) value);
-                                    } else if (value instanceof Integer) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Integer) value);
-                                    } else if (value instanceof Long) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Long) value);
-                                    } else if (value instanceof Float) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Float) value);
-                                    } else if (value instanceof Double) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (Double) value);
-                                    } else if (value instanceof String) {
-                                        annotationBuilder = annotationBuilder.defineArray(methodName, (String) value);
-                                    } else {
-                                        annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                                    }
-                                } else if (value instanceof Annotation) {
-                                    annotationBuilder = annotationBuilder.define(methodName, (Annotation) value);
-                                } else if (value instanceof Class<?>) {
-                                    annotationBuilder = annotationBuilder.define(methodName, (Class<?>) value);
-                                } else if (value instanceof Enum<?>) {
-                                    annotationBuilder = annotationBuilder.define(methodName, (Enum<?>) value);
-                                } else {
-                                    annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                                }
+                                annotationBuilder = defineMemberValue(annotationBuilder, memberMethod, methodName, value);
                             } catch (Exception e) {
                                 log.error("annotate annotation failed !", e);
                             }
@@ -292,14 +206,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                         }
                     }
 
-                    //处理参数
-                    Map<String, Object> paramMap = new HashMap<>();
-                    for (Map.Entry<String, Object> entry : methodComment.entrySet()) {
-                        String key = entry.getKey();
-                        if (key.startsWith(PARAM_KEY_PRE)) {
-                            paramMap.put(key.replace(PARAM_KEY_PRE, ""), entry.getValue());
-                        }
-                    }
+                    Map<String, Object> paramMap = initParamCommentInMethod(methodComment);
                     Parameter[] parameters = method.getParameters();
                     for (int i = 0; i < parameters.length; i++) {
                         Parameter parameter = parameters[i];
@@ -329,50 +236,7 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
                                         //没有映射，取注解定义的默认值
                                         value = memberMethod.getDefaultValue();
                                     }
-                                    Class<?> returnType = memberMethod.getReturnType();
-                                    if (returnType.isArray()) {
-                                        Class<Annotation> componentType = (Class<Annotation>) returnType.getComponentType();
-                                        if (value instanceof Annotation[]) {
-                                            annotationBuilder = annotationBuilder.defineAnnotationArray(methodName, componentType, (Annotation[]) value);
-                                        } else if (value instanceof Class<?>[]) {
-                                            annotationBuilder = annotationBuilder.defineTypeArray(methodName, (Class<?>[]) value);
-                                        } else if (value instanceof Enum<?>[]) {
-                                            Set<String> enums = new HashSet<>();
-                                            for (Enum<?> anEnum : ((Enum<?>[]) value)) {
-                                                enums.add(anEnum.name());
-                                            }
-                                            annotationBuilder = annotationBuilder.defineEnumerationArray(methodName,
-                                                    TypeDescription.ForLoadedType.of(componentType), enums.toArray(new String[0]));
-                                        } else if (value instanceof Boolean) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Boolean) value);
-                                        } else if (value instanceof Byte) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Byte) value);
-                                        } else if (value instanceof Short) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Short) value);
-                                        } else if (value instanceof Character) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Character) value);
-                                        } else if (value instanceof Integer) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Integer) value);
-                                        } else if (value instanceof Long) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Long) value);
-                                        } else if (value instanceof Float) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Float) value);
-                                        } else if (value instanceof Double) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (Double) value);
-                                        } else if (value instanceof String) {
-                                            annotationBuilder = annotationBuilder.defineArray(methodName, (String) value);
-                                        } else {
-                                            annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                                        }
-                                    } else if (value instanceof Annotation) {
-                                        annotationBuilder = annotationBuilder.define(methodName, (Annotation) value);
-                                    } else if (value instanceof Class<?>) {
-                                        annotationBuilder = annotationBuilder.define(methodName, (Class<?>) value);
-                                    } else if (value instanceof Enum<?>) {
-                                        annotationBuilder = annotationBuilder.define(methodName, (Enum<?>) value);
-                                    } else {
-                                        annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
-                                    }
+                                    annotationBuilder = defineMemberValue(annotationBuilder, memberMethod, methodName, value);
                                 } catch (Exception e) {
                                     log.error("annotate annotation failed !", e);
                                 }
@@ -400,6 +264,66 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             }
             unloaded.load(classLoader, ClassReloadingStrategy.fromInstalledAgent());
         }
+    }
+
+    private Map<String, Object> initParamCommentInMethod(Map<String, Object> methodComment) {
+        //初始化注释
+        Map<String, Object> paramMap = new HashMap<>();
+        for (Map.Entry<String, Object> entry : methodComment.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith(PARAM_KEY_PRE)) {
+                paramMap.put(key.replace(PARAM_KEY_PRE, ""), entry.getValue());
+            }
+        }
+        return paramMap;
+    }
+
+    private AnnotationDescription.Builder defineMemberValue(AnnotationDescription.Builder annotationBuilder, Method memberMethod, String methodName, Object value) {
+        Class<?> returnType = memberMethod.getReturnType();
+        if (returnType.isArray()) {
+            Class<Annotation> componentType = (Class<Annotation>) returnType.getComponentType();
+            if (value instanceof Annotation[]) {
+                annotationBuilder = annotationBuilder.defineAnnotationArray(methodName, componentType, (Annotation[]) value);
+            } else if (value instanceof Class<?>[]) {
+                annotationBuilder = annotationBuilder.defineTypeArray(methodName, (Class<?>[]) value);
+            } else if (value instanceof Enum<?>[]) {
+                Set<String> enums = new HashSet<>();
+                for (Enum<?> anEnum : ((Enum<?>[]) value)) {
+                    enums.add(anEnum.name());
+                }
+                annotationBuilder = annotationBuilder.defineEnumerationArray(methodName,
+                        TypeDescription.ForLoadedType.of(componentType), enums.toArray(new String[0]));
+            } else if (value instanceof Boolean) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Boolean) value);
+            } else if (value instanceof Byte) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Byte) value);
+            } else if (value instanceof Short) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Short) value);
+            } else if (value instanceof Character) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Character) value);
+            } else if (value instanceof Integer) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Integer) value);
+            } else if (value instanceof Long) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Long) value);
+            } else if (value instanceof Float) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Float) value);
+            } else if (value instanceof Double) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (Double) value);
+            } else if (value instanceof String) {
+                annotationBuilder = annotationBuilder.defineArray(methodName, (String) value);
+            } else {
+                annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
+            }
+        } else if (value instanceof Annotation) {
+            annotationBuilder = annotationBuilder.define(methodName, (Annotation) value);
+        } else if (value instanceof Class<?>) {
+            annotationBuilder = annotationBuilder.define(methodName, (Class<?>) value);
+        } else if (value instanceof Enum<?>) {
+            annotationBuilder = annotationBuilder.define(methodName, (Enum<?>) value);
+        } else {
+            annotationBuilder = annotationBuilder.define(methodName, AnnotationValue.ForConstant.of(value));
+        }
+        return annotationBuilder;
     }
 
     private Map<String, Map<String, Object>> initAllMethodComment(ClassJavadoc classDoc) {
