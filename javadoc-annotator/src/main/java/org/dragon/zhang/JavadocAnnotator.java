@@ -183,6 +183,13 @@ public abstract class JavadocAnnotator implements BeanFactoryAware {
             }
             unloaded.load(classLoader, ClassReloadingStrategy.fromInstalledAgent());
         }
+        restartFrameworkIfNeed();
+    }
+
+    /**
+     * 如果框架有缓存的话，需要重启才能获取到最新的注解
+     */
+    protected void restartFrameworkIfNeed() {
     }
 
     private AnnotationDescription buildAnnotation(Map<String, Object> comment, JavadocMapping<? extends Annotation> mapping, String parameterName) {

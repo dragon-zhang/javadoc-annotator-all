@@ -10,10 +10,15 @@ import io.swagger.annotations.Extension;
 import io.swagger.annotations.ResponseHeader;
 import org.dragon.zhang.JavadocAnnotator;
 import org.dragon.zhang.JavadocMapping;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
+import springfox.documentation.spring.web.DocumentationCache;
+import springfox.documentation.spring.web.plugins.DocumentationPluginsBootstrapper;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,6 +29,9 @@ import java.util.Set;
  * @date 2021/03/07
  */
 public class SwaggerAnnotator extends JavadocAnnotator {
+
+    @Autowired
+    private BeanFactory beanFactory;
 
     @Override
     protected Set<Class<? extends Annotation>> buildTypeMarks() {
@@ -348,6 +356,34 @@ public class SwaggerAnnotator extends JavadocAnnotator {
         Set<JavadocMapping<? extends Annotation>> set = new HashSet<>();
         set.add(new JavadocMapping<>(api, apiMapping));
         return set;
+    }
+
+    @Override
+    protected void restartFrameworkIfNeed() {
+        //重启swagger
+        DocumentationPluginsBootstrapper swaggerBootstrapper = beanFactory.getBean("documentationPluginsBootstrapper", DocumentationPluginsBootstrapper.class);
+        if (swaggerBootstrapper.isRunning()) {
+            swaggerBootstrapper.stop();
+            Field scanned = null;
+            for (Field field : DocumentationPluginsBootstrapper.class.getDeclaredFields()) {
+                if (field.getType().equals(DocumentationCache.class)) {
+                    scanned = field;
+                    break;
+                }
+            }
+            if (null != scanned) {
+                scanned.setAccessible(true);
+                try {
+                    DocumentationCache cache = (DocumentationCache) scanned.get(swaggerBootstrapper);
+                    while (!cache.all().isEmpty()) {
+                    }
+                    //等缓存全部清空了，才能重启swagger
+                    swaggerBootstrapper.start();
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
 }
